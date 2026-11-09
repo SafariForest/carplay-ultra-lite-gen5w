@@ -8,7 +8,6 @@ CarPlay Ultra-style features for Hyundai and Kia **Gen5W** head units running **
   - temperatures, fan, A/C, AUTO, SYNC, vents, recirculation, seat heat, and front and rear defrost
   - a climate panel for each seat; the passenger's power button turns off just the passenger side
 - **The CarPlay Ultra theme:** wallpapers and colours you pick in CarPlay **Settings > Themes**.
-- **EV routing in Apple Maps:** charge level, range and charging stops, from the included E-GMP CarPlay EV Routing mod.
 
 **Status:** tested on a **Hyundai Ioniq 6 (US, firmware 260507)**. The Kia EV6 and Hyundai Ioniq 5 should work too; run the compatibility check first. This is an unofficial mod and you use it at your own risk.
 
@@ -36,10 +35,10 @@ If anything says **NO**, don't install. Open an issue with `cp-climate-check.md`
 
 ## Step 2: install
 
-1. If the check says your EV routing mod is **signed by another author**, remove that mod in the HMG-API app first.
+1. If the check says an E-GMP CarPlay EV Routing mod on your car is **signed by another author**, remove it in the HMG-API app first: the theme needs the build included here.
 2. Copy everything inside **`usb-2-install-ioniq6-with-wireless-fix`** (Ioniq 6: it also brings the wireless CarPlay/Android Auto fix the Ioniq 6 needs) or **`usb-2-install-ev6-ioniq5`** (EV6 and Ioniq 5, which already have wireless CarPlay from HMG-API) to the top of the stick.
 3. In the HMG-API app, open **Updates** and install every package:
-   - Order: wireless-carplay-aa first (Ioniq 6 only), then E-GMP CarPlay EV Routing, then CarPlay Ultra-Lite.
+   - Order: wireless-carplay-aa first (Ioniq 6 only), then E-GMP CarPlay EV Routing (it tells the iPhone which theme to load), then CarPlay Ultra-Lite.
    - Confirm the author key `4bec7579-…`.
    - On an EV6 or Ioniq 5, choose **Install anyway**.
 4. Apply the changes and restart the head unit.
@@ -56,7 +55,6 @@ If anything says **NO**, don't install. Open an issue with `cp-climate-check.md`
 | CarPlay Ultra-Lite | CarPlay Ultra | on | Off: climate only, with the classic CarPlay look. Also turn EV Routing's CarPlay theme off. |
 | CarPlay Ultra-Lite | Rear window defrost | on | Works in READY only. |
 | E-GMP CarPlay EV Routing | CarPlay theme | on | Needs CarPlay Ultra on. |
-| E-GMP CarPlay EV Routing | Engine type | electric | Keep electric for EV routing in Apple Maps. |
 
 Restart the head unit after changing a setting. After a theme change, also forget and pair the iPhone again.
 
@@ -77,7 +75,7 @@ Restart the head unit after changing a setting. After a theme change, also forge
 
 - The climate and vehicle protocol is based on [LIVI](https://github.com/f-io/LIVI) by Lasse Heitgres (GPL-3.0).
 - Wireless CarPlay and Android Auto come from [HMG-API](https://github.com/VysseCodes/HMG-API) (AGPL-3.0).
-- EV routing comes from the E-GMP CarPlay EV Routing project (GPL-3.0).
+- The theme is switched on through a modified build of the E-GMP CarPlay EV Routing mod (GPL-3.0), which is not part of this project.
 - CarPlay Ultra-Lite is GPL-3.0-or-later. Its source code, and the source of the other two mods, is in the bundle's `source/` folder.
 
 Not affiliated with Apple, Hyundai, Kia or Aston Martin. CarPlay is a trademark of Apple Inc.
