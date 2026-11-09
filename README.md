@@ -39,6 +39,7 @@ If anything says **NO**, don't install. Open an issue with `cp-climate-check.md`
    - **HMG-API won't swap them.** Both have the same mod ID, and HMG-API only updates a mod with a package from the same author.
    - **A new name wouldn't help.** Both builds change the same parts of the car's CarPlay connection, so running both could break wireless CarPlay.
    - **You lose nothing.** The build included here does everything the original does, and adds the theme.
+   - **Your car stays your car.** The included build carries a separate profile for each car, and HMG-API installs only the one for yours: an EV6 shows in Apple Maps as a Kia EV6 and an Ioniq 5 as an Ioniq 5, each with its own battery size and charging curve. Charge level, range, mileage, speed and gear are always read live from your own car. As in the original, the profiles are for the US long-range battery on firmware 260507.
 2. Copy everything inside **`usb-2-install-ioniq6-with-wireless-fix`** (Ioniq 6: it also brings the wireless CarPlay/Android Auto fix the Ioniq 6 needs) or **`usb-2-install-ev6-ioniq5`** (EV6 and Ioniq 5, which already have wireless CarPlay from HMG-API) to the top of the stick.
 3. In the HMG-API app, open **Updates** and install every package:
    - Order: wireless-carplay-aa first (Ioniq 6 only), then E-GMP CarPlay EV Routing (it tells the iPhone which theme to load), then CarPlay Ultra-Lite.
