@@ -66,8 +66,13 @@ Restart the head unit after changing a setting. After a theme change, also forge
 
 - **Power buttons:** the driver's turns the climate off; the passenger's turns off only the passenger side.
 - **Buttons on both sides:** A/C, recirculation and the defrost buttons show on both seats' panels. That's how CarPlay lays them out.
-- **Home button:** the Hyundai/Kia home button is hidden while the theme is on.
+- **Getting back to the car's screens:** while the theme is on, CarPlay has no Hyundai/Kia logo button to tap. Use any of the car's own buttons that lead back to its home screen instead. A fix is being looked into.
 - **USB cable:** plugging a cable into the car's USB port can drop CarPlay for a few seconds; it reconnects by itself.
+
+## Planned
+
+- The Hyundai/Kia logo button in CarPlay, to get back to the car's own screens.
+- CarPlay's **Vehicle** and **Radio** apps working with the car.
 
 ## Troubleshooting
 
