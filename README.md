@@ -35,7 +35,10 @@ If anything says **NO**, don't install. Open an issue with `cp-climate-check.md`
 
 ## Step 2: install
 
-1. If the check says an E-GMP CarPlay EV Routing mod on your car is **signed by another author**, remove it in the HMG-API app first: the theme needs the build included here.
+1. If the check says an E-GMP CarPlay EV Routing mod on your car is **signed by another author**, remove it in the HMG-API app first. Why: the theme needs the build included here, and the two can't be installed side by side:
+   - **HMG-API won't swap them.** Both have the same mod ID, and HMG-API only updates a mod with a package from the same author.
+   - **A new name wouldn't help.** Both builds change the same parts of the car's CarPlay connection, so running both could break wireless CarPlay.
+   - **You lose nothing.** The build included here does everything the original does, and adds the theme.
 2. Copy everything inside **`usb-2-install-ioniq6-with-wireless-fix`** (Ioniq 6: it also brings the wireless CarPlay/Android Auto fix the Ioniq 6 needs) or **`usb-2-install-ev6-ioniq5`** (EV6 and Ioniq 5, which already have wireless CarPlay from HMG-API) to the top of the stick.
 3. In the HMG-API app, open **Updates** and install every package:
    - Order: wireless-carplay-aa first (Ioniq 6 only), then E-GMP CarPlay EV Routing (it tells the iPhone which theme to load), then CarPlay Ultra-Lite.
