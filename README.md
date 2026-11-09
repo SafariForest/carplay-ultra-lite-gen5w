@@ -35,7 +35,7 @@ If anything says **NO**, don't install. Open an issue with `cp-climate-check.md`
 
 ## Step 2: install
 
-1. If the check says an E-GMP CarPlay EV Routing mod on your car is **signed by another author**, remove it in the HMG-API app first. Why: the theme needs the build included here, and the two can't be installed side by side:
+1. If the check says an E-GMP CarPlay EV Routing mod on your car is **signed by another author**, remove it in the HMG-API app first ([original project](https://github.com/isaacwisdom/egmp-carplay-ev-routing)). Why: the theme needs the build included here, and the two can't be installed side by side:
    - **HMG-API won't swap them.** Both have the same mod ID, and HMG-API only updates a mod with a package from the same author.
    - **A new name wouldn't help.** Both builds change the same parts of the car's CarPlay connection, so running both could break wireless CarPlay.
    - **You lose nothing.** The build included here does everything the original does, and adds the theme.
@@ -79,7 +79,7 @@ Restart the head unit after changing a setting. After a theme change, also forge
 
 - The climate and vehicle protocol is based on [LIVI](https://github.com/f-io/LIVI) by Lasse Heitgres (GPL-3.0).
 - Wireless CarPlay and Android Auto come from [HMG-API](https://github.com/VysseCodes/HMG-API) (AGPL-3.0).
-- The theme is switched on through a modified build of the E-GMP CarPlay EV Routing mod (GPL-3.0), which is not part of this project.
+- The theme is switched on through a modified build of the [E-GMP CarPlay EV Routing](https://github.com/isaacwisdom/egmp-carplay-ev-routing) mod (GPL-3.0), which is not part of this project. The changes made to it are in the bundle's `source/` folder.
 - CarPlay Ultra-Lite is GPL-3.0-or-later. Its source code, and the source of the other two mods, is in the bundle's `source/` folder.
 
 Not affiliated with Apple, Hyundai, Kia or Aston Martin. CarPlay is a trademark of Apple Inc.
