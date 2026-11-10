@@ -16,6 +16,8 @@ CarPlay Ultra-style features for Hyundai and Kia **Gen5W** head units running **
 
 Get **carplay-ultra-lite-bundle-1.0.0.zip** from the [latest release](../../releases/latest) and unzip it; the USB folders the steps below mention are inside. To run only the compatibility check first, get **carplay-ultra-lite-check-1.0.0-usb.zip** and copy its `HMGAPI` folder to the top of a USB stick.
 
+**Test build 1.3.3:** for a car that already runs 1.0.0, **carplay-ultra-lite-1.3.3-usb-update.zip** is on the [1.3.3 test build page](../../releases/tag/v1.3.3-test). It has run for a few hours on one Ioniq 6; read [In testing](#in-testing-the-next-release) and the README inside the zip first.
+
 ## What you need
 
 - **HMG-API** 1.0.0 or later, working on your car with your car's hook map.
@@ -65,7 +67,7 @@ Restart the head unit after changing a setting. After a theme change, also forge
 
 ## In testing: the next release
 
-Version 1.3 is running on the test car (Hyundai Ioniq 6, US, firmware 260507). It is **not in the download yet**; the release above is still 1.0.0. The full list of changes is in the [changelog](CHANGELOG.md).
+Version 1.3.3 is running on the test car (Hyundai Ioniq 6, US, firmware 260507) and is available as a **test build** (see [Download](#download)); the main release is still 1.0.0. The full list of changes is in the [changelog](CHANGELOG.md).
 
 ### The car's page in CarPlay's Vehicle app
 

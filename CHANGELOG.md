@@ -1,6 +1,6 @@
 # Changelog
 
-Versions after 1.0.0 are test builds running on one car (Hyundai Ioniq 6, US, firmware 260507). The download on the releases page is still 1.0.0.
+Versions after 1.0.0 are test builds running on one car (Hyundai Ioniq 6, US, firmware 260507). 1.3.3 is published as a test build (an update for a car on 1.0.0); the main release is still 1.0.0.
 
 ## 1.3.3 (2026-11-10, in testing)
 
