@@ -8,6 +8,7 @@ CarPlay Ultra-style features for Hyundai and Kia **Gen5W** head units running **
   - temperatures, fan, A/C, AUTO, SYNC, vents, recirculation, seat heat, and front and rear defrost
   - a climate panel for each seat; the passenger's power button turns off just the passenger side
 - **The CarPlay Ultra theme:** wallpapers and colours you pick in CarPlay **Settings > Themes**.
+- **Coming in the next release** (running on the test car now, see [In testing](#in-testing-the-next-release)): the car's own page in CarPlay's **Vehicle** app, the car's volume in CarPlay, and vehicle notifications.
 
 **Status:** tested on a **Hyundai Ioniq 6 (US, firmware 260507)**. The Kia EV6 and Hyundai Ioniq 5 should work too; run the compatibility check first. This is an unofficial mod and you use it at your own risk.
 
@@ -62,17 +63,76 @@ If anything says **NO**, don't install. Open an issue with `cp-climate-check.md`
 
 Restart the head unit after changing a setting. After a theme change, also forget and pair the iPhone again.
 
+## In testing: the next release
+
+Version 1.3 is running on the test car (Hyundai Ioniq 6, US, firmware 260507). It is **not in the download yet**; the release above is still 1.0.0. The full list of changes is in the [changelog](CHANGELOG.md).
+
+### The car's page in CarPlay's Vehicle app
+
+![The top of the Vehicle app: Notifications, Volume and the car's section](images/vehicle-top.png)
+
+- **Live readings:** battery level, range and odometer, read from the car and rounded the way the instrument cluster rounds them. Nothing is sent to the car for these.
+- **Car home screen:** a button that takes you to the head unit's own home screen. The car's MEDIA button brings you straight back to CarPlay.
+- **Battery preconditioning:** a switch, if [Launchpad](https://github.com/paytondevs/gen5w-preconditioning) is installed. Launchpad stays the one that sends the request, with its own checks and time limit.
+
+![The car's section: battery, preconditioning, range and odometer](images/vehicle-car.png)
+
+- **Ambient light:** a switch for the Light Vibes "lights follow the music" effect and a button that opens Light Vibes, if it is installed.
+
+![The Ambient light section](images/vehicle-ambient-light.png)
+
+- **Head unit:** buttons that open the head unit's own screens: HMG-API, NEMESIS Manager, Radio, EV and Vehicle settings.
+
+![The Head unit section](images/vehicle-head-unit.png)
+
+### The car's volume in CarPlay
+
+![CarPlay's Volume page showing the car's levels](images/vehicle-volume.png)
+
+- CarPlay's **Volume** page shows the head unit's real levels for media, navigation, phone and Siri, follows the volume knob and the steering wheel buttons, and sets the car's volume when you change it in CarPlay.
+- **Experiment, off by default:** while CarPlay is on the screen, the volume knob and the steering wheel's volume and mute buttons show only CarPlay's own slider, not the head unit's volume pop-up. Everywhere else the volume looks and works as always.
+
+![CarPlay's own volume slider, with the head unit's pop-up gone](images/volume-slider.png)
+
+### Vehicle notifications
+
+- The Vehicle app has a **Notifications** list, and its icon shows a badge. For now the car posts one entry at each start, to prove the list works; real events come next (see [Planned](#planned)).
+
+### New settings
+
+| Setting | Default | Notes |
+|---|---|---|
+| The car's page in CarPlay's Vehicle app | on | |
+| Car volume in CarPlay | on | CarPlay's Volume page shows and sets the car's levels. |
+| Only CarPlay's volume slider in CarPlay (experiment) | off | Handles the volume keys inside the car's system software while CarPlay is on screen. If the volume keys ever misbehave, turn it off and restart. |
+
+### Known issues in the test build
+
+- **Mute:** with the experiment on, the head unit's volume pop-up still flashes for a moment when you press mute on the steering wheel. To be fixed.
+- **Radio:** CarPlay's Radio app opens but says "DAB Radio Not Available": the car's tuner isn't connected to it yet. The Radio button in the Vehicle app opens the head unit's own radio.
+- **Other cars:** the section is titled "Ioniq 6" on every car, and the preconditioning, Ambient light and screen rows also show on a car that doesn't have those apps, where they do nothing.
+- **Volume page:** the last row is still labelled "Musik", a leftover placeholder.
+
 ## Good to know
 
 - **Power buttons:** the driver's turns the climate off; the passenger's turns off only the passenger side.
 - **Buttons on both sides:** A/C, recirculation and the defrost buttons show on both seats' panels. That's how CarPlay lays them out.
-- **Getting back to the car's screens:** while the theme is on, CarPlay has no Hyundai/Kia logo button to tap. Use any of the car's own buttons that lead back to its home screen instead. A fix is being looked into.
+- **Getting back to the car's screens:** while the theme is on, CarPlay has no Hyundai/Kia logo button to tap. Use any of the car's own buttons that lead back to its home screen instead. The next release adds a **Car home screen** button in CarPlay's Vehicle app.
 - **USB cable:** plugging a cable into the car's USB port can drop CarPlay for a few seconds; it reconnects by itself.
 
 ## Planned
 
-- The Hyundai/Kia logo button in CarPlay, to get back to the car's own screens.
-- CarPlay's **Vehicle** and **Radio** apps working with the car.
+The aim: everything you use the head unit's own screens for, inside CarPlay.
+
+- **Radio:** FM, AM and HD stations and tuning in CarPlay's Radio app, from the head unit's own tuner.
+- **Sound settings:** bass, mid, treble, balance, fade and the equaliser presets in CarPlay.
+- **Charging:** charging status, time remaining and charge limits in the Vehicle app.
+- **Real notifications:** charging finished, a tyre warning, a trip summary when you park.
+- **Vehicle settings in CarPlay:** the common ones (drive mode and the like) as rows, not only as a shortcut to the head unit's screen.
+- **Light Vibes page:** presets, brightness and mode in CarPlay.
+- **Other cars:** rows hidden when a car doesn't have the app behind them, and the section named after the car it runs on.
+- **Fixes:** the volume pop-up that still flashes on mute, and the "Musik" label on the Volume page.
+- **Being looked into:** Waze alerts (police, hazards) shown on the instrument cluster and through the ambient light.
 
 ## Troubleshooting
 
