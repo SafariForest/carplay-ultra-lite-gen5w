@@ -36,7 +36,7 @@ import org.bouncycastle.tls.crypto.impl.bc.BcTlsCrypto;
  */
 public final class PhoneProxy {
     static final Charset ASCII = Charset.forName("US-ASCII");
-    static final int CONNECT_TIMEOUT_MS = 8000, READ_TIMEOUT_MS = 20000;
+    static final int CONNECT_TIMEOUT_MS = 8000, READ_TIMEOUT_MS = 10000;   // a stalled read is retried after 10 s (was 20)
 
     final InetAddress address;
     final int port;
@@ -98,8 +98,16 @@ public final class PhoneProxy {
             raw.connect(new InetSocketAddress(address, port), CONNECT_TIMEOUT_MS);
             raw.setSoTimeout(READ_TIMEOUT_MS);
             raw.setTcpNoDelay(true);
-            TlsClientProtocol tls = new TlsClientProtocol(raw.getInputStream(), raw.getOutputStream());
-            tls.connect(new PskClient(crypto, identity, psk, variant));
+            final TlsClientProtocol tls = new TlsClientProtocol(raw.getInputStream(), raw.getOutputStream());
+            final PskClient client = new PskClient(crypto, identity, psk, variant);
+            Video.trace("proxy: handshake (" + name(variant) + ")");
+            TunnelHttp.onBigStack("cp-climate-proxy-tls", new TunnelHttp.IoTask() {
+                @Override
+                public void run() throws IOException {
+                    tls.connect(client);
+                }
+            }, tls);
+            Video.trace("proxy: handshake ok, CONNECT " + host + ":" + targetPort);
             OutputStream out = tls.getOutputStream();
             InputStream in = tls.getInputStream();
             String target = (host.indexOf(':') >= 0 ? "[" + host + "]" : host) + ":" + targetPort;

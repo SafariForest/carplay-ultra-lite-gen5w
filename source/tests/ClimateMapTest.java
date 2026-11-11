@@ -324,7 +324,7 @@ public class ClimateMapTest {
         check("on again: 21.5 comes back (" + backShown + ")", back.size() == 1 && backShown.contains("520: 21.5") && !backShown.contains("errors"));
         ClimateMap.blankWhenOff = false;
 
-        // cooling writes: no instant echo; the car's confirmation is what the phone hears
+        // cooling writes are echoed at once, like heating (1.1.6; the held-back echo of 1.1.2-1.1.5 made the button flash)
         ClimateMap.extras = true;
         VehicleState.extras = true;
         VehicleState.coolingLayout = true;
@@ -337,14 +337,12 @@ public class ClimateMapTest {
         cs.fromCar(ClimateMap.toCarPlay(cool3));
         List<VehicleState.Out> wrote = cs.handle(VehicleState.HIGH, VehicleState.wrap(VehicleState.dict("command", "writeRequest", "transactionID", 2L,
                 "values", VehicleState.dict(1026L, -2L))));
-        check("cool 3 -> 2 write: only the writeResponse, no echo", wrote.size() == 1);
-        check("the car still at cool 3: nothing", cs.fromCar(ClimateMap.toCarPlay(cool3)).isEmpty());
+        String wshown = wrote.size() < 2 ? "" : Opack.show((byte[]) VehicleState.get(OpackCodec.decode(wrote.get(1).message), "pluginData"));
+        check("cool 3 -> 2 write: the writeResponse and the echo of -2 (" + wshown + ")", wrote.size() == 2 && wshown.contains("1026: -2"));
+        check("the car still at cool 3 (within the hold): nothing", cs.fromCar(ClimateMap.toCarPlay(cool3)).isEmpty());
         ClimateMap.Reading cool2 = car(1, 0, 0, 0, 2, 3, 2, 77, 0);
         cool2.driverSeat = 4;
-        List<VehicleState.Out> conf = cs.fromCar(ClimateMap.toCarPlay(cool2));
-        String cshown = conf.isEmpty() ? "" : Opack.show((byte[]) VehicleState.get(OpackCodec.decode(conf.get(0).message), "pluginData"));
-        check("the car at cool 2: the phone is told -2 (" + cshown + ")", conf.size() == 1 && cshown.contains("1026: -2"));
-        check("and only once", cs.fromCar(ClimateMap.toCarPlay(cool2)).isEmpty());
+        check("the car at cool 2: nothing more (the phone already has -2)", cs.fromCar(ClimateMap.toCarPlay(cool2)).isEmpty());
         System.out.println(fails == 0 ? "ALL OK" : fails + " FAILED");
         System.exit(fails == 0 ? 0 : 1);
     }

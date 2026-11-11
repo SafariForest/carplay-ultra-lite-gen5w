@@ -136,6 +136,8 @@ public final class CpClimate extends ModEntry {
             VehicleState.zonePower = m.settingBoolean("zone_power", false);
             VehicleState.rearZone = m.settingBoolean("rear_zone", true);
             ClimateMap.blankWhenOff = m.settingBoolean("blank_when_off", true);
+            VehicleState.ventCard = "passenger".equals(m.settingString("vent_card", "driver")) ? "passenger" : "driver";
+            VehicleState.coolingMin = "-4".equals(m.settingString("cooling_min", "-4")) ? -4 : -3;
             String layout = m.settingString("extras_layout", "b");
             VehicleState.coolingLayout = "b".equals(layout) || "c".equals(layout) || "d".equals(layout);
             VehicleState.rowRear = "c".equals(layout);
@@ -150,6 +152,10 @@ public final class CpClimate extends ModEntry {
             if ((extraBits & 1) != 0) new ClusterSink(log, 7134, "videoPlayback").start();
             // video stage 2: the playback messages the native /command hook answers and passes on
             if ((extraBits & 1) != 0) {
+                // test: the video engine plays sound only (no picture decoder), to tell a decoder crash from the rest
+                writeNumber(dir, "cpc-video-nopicture", m.settingBoolean("video_no_picture", false) ? 1 : 0, "video: sound only (test)");
+                // the head unit doesn't play sound from CarPlay's process yet, and trying makes the picture race
+                writeNumber(dir, "cpc-video-nosound", m.settingBoolean("video_sound", false) ? 0 : 1, "video: picture only");
                 new VideoMessages(log).start();
                 // the video engine (ExoPlayer through the phone's proxy), when this build has it
                 boolean engine = app.context != null && VideoMessages.startEngine(app.context);

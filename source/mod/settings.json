@@ -26,6 +26,22 @@
    "apply": "restart"
   },
   {
+   "key": "video_sound",
+   "type": "toggle",
+   "default": false,
+   "title": "Video: play the sound (test)",
+   "description": "Only with video playback on. Off: videos play picture only, at the right speed. On: the player also plays the sound, but the head unit doesn't yet output sound from CarPlay's app, and the picture then runs too fast with no sound. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "video_no_picture",
+   "type": "toggle",
+   "default": false,
+   "title": "Video: sound only (test)",
+   "description": "Only with video playback on. The video player leaves the picture out and plays only the sound, to find out whether the head unit's video decoder is what stops CarPlay. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
    "key": "extra_seats",
    "type": "toggle",
    "default": false,
@@ -69,6 +85,30 @@
    "default": false,
    "title": "Steering wheel heater button",
    "description": "Only with the extra seat controls on. Adds the steering wheel heater to CarPlay's climate. Off by default: the driver's card has room for three buttons (AUTO, vent position, seat), and CarPlay drew the wheel on top of the vent position button. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "vent_card",
+   "type": "choice",
+   "default": "driver",
+   "title": "Card for the vent position buttons",
+   "description": "Which seat's climate card has the vent position (fan direction) buttons. The car has one vent mode for the whole cabin, so either card sets it. In layout D each seat card has room for two buttons: with the vents on the passenger's card, the driver's card has AUTO and the seat, the passenger's the vents and the seat. Restart the head unit afterwards.",
+   "options": [
+    { "value": "driver", "title": "Driver's card" },
+    { "value": "passenger", "title": "Passenger's card" }
+   ],
+   "apply": "restart"
+  },
+  {
+   "key": "cooling_min",
+   "type": "choice",
+   "default": "-4",
+   "title": "Seat cooling steps shown to CarPlay",
+   "description": "Only with layout B, C or D. The car's seats have three ventilation steps. With -3, CarPlay lit one dot too many when cooling (level 1 showed 2 dots). -4 (default): CarPlay draws a four-step bar; the car's high, medium and low show as full, half and a quarter. Restart the head unit afterwards.",
+   "options": [
+    { "value": "-3", "title": "-3 (three steps)" },
+    { "value": "-4", "title": "-4: four-step bar (default)" }
+   ],
    "apply": "restart"
   },
   {

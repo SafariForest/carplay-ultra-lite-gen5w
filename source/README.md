@@ -8,7 +8,7 @@ The source for the **CarPlay Ultra-Lite** HMG-API mod (mod id `cp-climate`), as 
 - **Video playback** (experimental): CarPlay's video playback feature (AirPlay video from the iPhone),
   played on the head unit with ExoPlayer through the iPhone's network.
 
-The branch numbers its own builds **1.0.4 to 1.1.2**. That numbering is separate from the 1.3.x test builds in the
+The branch numbers its own builds **1.0.4 to 1.1.7**. That numbering is separate from the 1.3.x test builds in the
 main README. Everything here was built and tested on one car: a **Hyundai Ioniq 6, CEEV, Canada, firmware
 250818** (head unit build `CEEV.CAN.0000.V014.010.250818`), with iOS 27.2. This is an unofficial mod; use it at your own risk.
 
@@ -18,12 +18,15 @@ main README. Everything here was built and tested on one car: a **Hyundai Ioniq 
 |---|---|
 | Climate as in 1.0.0 (temperatures, fan, A/C, AUTO, SYNC, vents, recirculation, front seat heat, defrost) | Works in the car |
 | Car picture in Apple's Climate app (the phone builds the car from `/info`, see below) | Works in the car (1.0.6) |
-| Front seat cooling levels −1 to −3 from CarPlay | Car follows each step (1.1.1). CarPlay's dots are drawn one step off; 1.1.2 tries holding back the echo |
+| Front seat heat and cooling from CarPlay | Works in the car (1.1.6). Cooling shows as a four-step bar (`cooling_min`), so the car's low, medium and high light the right dots |
+| Steering wheel heat (`wheel_heater`) | Works in the car (1.1.7): on/off only. The car's indicator lags about 5.5 s, so the head unit keeps the phone's press for 8 s |
 | Rear seat heat; one rear zone (layout C) | Works in the car (1.0.7 to 1.1.0) |
 | Two rear zones (layout D) | Works in the car (1.1.1); no car picture (the theme has no picture for those seats) |
-| Climate off: last setpoint instead of the car's 17.0, or "no value" (`blank_when_off`) | 1.1.2, not yet tried in the car |
+| Vent position buttons on the passenger's card (`vent_card`), so layout D fits AUTO, vents and the seats | Works in the car (1.1.5) |
+| Climate off: last setpoint instead of the car's 17.0 | Works in the car. `blank_when_off` ("no value") is ignored by the phone |
 | Video: the phone's video messages reach the head unit and are answered | Works in the car (1.0.5) |
-| Video: playback through the phone's proxy | 1.1.0 reached the proxy and was refused at the TLS handshake. 1.1.2 tries three handshakes and sends answers off the main thread; not yet tried in the car |
+| Video: playback through the phone's proxy | Plays picture only in the car (1.1.6), with pauses to load. 1.1.7 loads each segment over several connections; not yet tried with video |
+| Video: sound | Not working: the head unit has no audio output for CarPlay's app process (`video_sound`, off by default) |
 
 ## Layout
 
@@ -86,7 +89,18 @@ the phone's playback messages (`playbackInfo`, seek, rate) the same way.
 
 The phone's proxy refused the first handshake tried in the car (TLS 1.3, key bound to SHA-256). `PhoneProxy` now
 tries TLS 1.3 with SHA-256 together with TLS 1.2 PSK suites, then TLS 1.3 with SHA-384, then TLS 1.2 PSK only. It keeps
-the first one that works and logs each attempt.
+the first one that works and logs each attempt. In the car, TLS 1.3 with SHA-384 is the one that works.
+
+Found in the car and fixed since:
+- Android 4.4's `SSLSocket` over the tunnel failed ("Socket closed"), so the HTTPS inside the tunnel is BouncyCastle's
+  TLS client too, with the certificate chain and host name checked against `roots/`. Its handshakes run on threads with a
+  4 MB stack.
+- The build left out ExoPlayer's `exoplayer-container`, so the first H.264 segment ended DiPO with a
+  `NoClassDefFoundError`. `fetch-libs.sh` now fetches it, and an error on the player's threads stops the video
+  instead of CarPlay.
+- Connections through the proxy are kept and reused (`TunnelHttp`). One connection gave 1.8 to 3.4 Mbit/s for a
+  3.5 Mbit/s stream, so `ParallelStream` fetches each segment as 512 KB ranges over three more connections.
+- A trace for testing: `files/cpc-video-trace.txt` in DiPO's data (loads with kbit/s, CPU every 5 s, errors).
 
 Limits: no FairPlay-protected content (Apple TV+, most paid apps), and the head unit decodes H.264 only (no HEVC,
 AC-3 or DTS).
@@ -103,8 +117,10 @@ AC-3 or DTS).
 - **Climate on/off:** the cabin gets an HVACOn characteristic (iid 514), so the phone knows when the system is off.
 - **Climate off:** the car reports 17.0 °C and an "invalid" flag (`0xff`) instead of the setpoint. The last setpoint seen while
   on is kept (`files/cpc-setpoints`). With `blank_when_off`, the zones get Apple's "no value" (`-6727`) instead.
-- **Fixes:** OPACK's one-byte −1 (tag `0x07`) wasn't decoded, so writes of cooling level 1 were dropped. Seat cooling
-  writes are now confirmed from the car's reading instead of echoed at once.
+- **Seat cooling:** with `cooling_min` −4 (default) the phone draws four steps. The car's ventilation states 5/4/3
+  (high/medium/low) read as −4/−2/−1, and the phone's −4, −3/−2 and −1 are sent as 5, 4 and 3.
+- **Steering wheel:** a 0 to 1 level (off/on). It used to copy the seats' range, so a tap could ask for cooling.
+- **Fixes:** OPACK's one-byte −1 (tag `0x07`) wasn't decoded, so writes of cooling level 1 were dropped.
 
 ## Settings
 
@@ -113,11 +129,15 @@ AC-3 or DTS).
 | `carplay_ultra` | on | The CarPlay Ultra theme (needs the E-GMP CarPlay EV Routing mod's theme) |
 | `rear_defrost` | on | CarPlay's rear window button runs the rear defrost (READY only) |
 | `video_playback` | on | Offers CarPlay's video playback feature to the phone |
+| `video_sound` | off | The video player plays sound too (test; the head unit doesn't output it yet) |
+| `video_no_picture` | off | The video player plays sound only (test) |
 | `extra_seats` | off | Rear seat heat, front seat ventilation, steering wheel heat (experimental) |
 | `extras_layout` | B | Layout A, B, C or D of the extra seat controls (above) |
 | `rear_zone` | on | Rear climate zone(s), layouts B to D |
-| `blank_when_off` | on | "No value" for the zone temperatures while the climate is off (test) |
-| `wheel_heater` | off | Steering wheel heater button (CarPlay drew it over the vent position button) |
+| `blank_when_off` | on | "No value" for the zone temperatures while the climate is off (test; the phone ignores it) |
+| `wheel_heater` | off | Steering wheel heater button, on/off (in layout D, CarPlay draws it over AUTO) |
+| `vent_card` | driver | Which seat card has the vent position buttons (driver or passenger) |
+| `cooling_min` | −4 | Seat cooling steps shown to CarPlay: −4 draws a four-step bar, −3 three steps |
 | `zone_power` | off | Per-seat power buttons. The passenger's is Driver Only; CarPlay drew the driver's over AUTO |
 | `vehicle_variant` | DBX | Which theme car CarPlay draws (test) |
 | `ambient_test` | off | A test setting that sends a colour to the mood light (experimental) |

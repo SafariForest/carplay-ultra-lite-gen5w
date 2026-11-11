@@ -38,6 +38,7 @@ libs/bcprov-jdk18on-1.78.1.jar $CENTRAL org/bouncycastle/bcprov-jdk18on 1.78.1 a
 libs/bctls-jdk18on-1.78.1.jar $CENTRAL org/bouncycastle/bctls-jdk18on 1.78.1 483bd1582d3957adfe100747f22c6da0ff9532d6464f9c454181f99bfa44e52b
 libs/bcutil-jdk18on-1.78.1.jar $CENTRAL org/bouncycastle/bcutil-jdk18on 1.78.1 d9fa56f97b0f761ce3bc8d9d74c5d7137a987bf5bd3abfe1003f9bafa45a1d2f
 libs/exoplayer-common-2.19.1.jar $GOOGLE com/google/android/exoplayer/exoplayer-common 2.19.1 43a1b8b5a978a6b702c18da890f8246c1aa560eb849bfdd1195bcf88c4547379
+libs/exoplayer-container-2.19.1.jar $GOOGLE com/google/android/exoplayer/exoplayer-container 2.19.1 4ec1d9dd09960a08a742bd69ccb47140ca4ee565cfb501288c4b5397d86a469f
 libs/exoplayer-core-2.19.1.jar $GOOGLE com/google/android/exoplayer/exoplayer-core 2.19.1 32912eac809c92f09e16cedc1981e1fee34041400e4dbdd0196f98470409b163
 libs/exoplayer-database-2.19.1.jar $GOOGLE com/google/android/exoplayer/exoplayer-database 2.19.1 755713eb73af98f300324c32461e0d575e3f1aea5181ae8fcb3b3a8b1e2e5da3
 libs/exoplayer-datasource-2.19.1.jar $GOOGLE com/google/android/exoplayer/exoplayer-datasource 2.19.1 9a21e83eb54cccf4cd20a1760d5d7f6ea00b89dff9382399db8446c7f05b16ec

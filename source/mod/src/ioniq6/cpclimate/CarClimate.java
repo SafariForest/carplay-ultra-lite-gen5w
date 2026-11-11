@@ -472,6 +472,11 @@ final class CarClimate extends Thread implements VehicleState.Car {
         return true;
     }
 
+    /** when this last pressed the wheel heater's toggle (elapsedRealtime, 0 never) and for which state */
+    volatile long wheelPressedAt;
+    volatile boolean wheelPressedFor;
+    static final long WHEEL_SETTLE_MS = 8000;
+
     /** the steering wheel heater's state: 1 if either indicator step is lit, 0 if both are dark, -1 if neither could be read */
     static int wheelOn(IBinder usm) {
         int s1 = seat(usm, txWheelStep1), s2 = seat(usm, txWheelStep2);
@@ -488,8 +493,14 @@ final class CarClimate extends Thread implements VehicleState.Car {
         IBinder usm = service(USM);
         if (usm == null) throw new IllegalStateException("no " + USM);
         int now = wheelOn(usm);
+        // the indicator follows a press only after several seconds (2026-11-11: on at :57.6, lit at :03.1); right
+        // after a press of ours, what that press asked for is the state, or an off 2 s after an on is skipped
+        long sincePress = android.os.SystemClock.elapsedRealtime() - wheelPressedAt;
+        if (wheelPressedAt != 0 && sincePress < WHEEL_SETTLE_MS) now = wheelPressedFor ? 1 : 0;
         if (now < 0) throw new IllegalStateException("the steering wheel heater's state can't be read");
         if ((now == 1) == want) return false;
+        wheelPressedAt = android.os.SystemClock.elapsedRealtime();
+        wheelPressedFor = want;
         Parcel data = Parcel.obtain(), reply = Parcel.obtain();
         try {
             data.writeInterfaceToken(USM_IFACE);

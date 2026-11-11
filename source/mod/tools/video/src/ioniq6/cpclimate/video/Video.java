@@ -70,7 +70,102 @@ public final class Video {
     public static void init(Context ctx) {
         context = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
         main = new Handler(Looper.getMainLooper());
-        log("video engine ready (ExoPlayer 2.19.1, proxy through the phone)");
+        noPicture = new File(FILES + "cpc-video-nopicture").exists();
+        noSound = new File(FILES + "cpc-video-nosound").exists();
+        // 2026-11-11: CarPlay's process died 1.7 s into a video with nothing in the log; record any uncaught error first
+        final Thread.UncaughtExceptionHandler before = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                try {
+                    java.io.StringWriter w = new java.io.StringWriter();
+                    e.printStackTrace(new java.io.PrintWriter(w));
+                    trace("UNCAUGHT in thread " + t.getName() + ": " + w);
+                } catch (Throwable ignored) {
+                }
+                // the video's own threads (ExoPlayer's, the TLS ones): the video stops, CarPlay keeps running
+                // (2026-11-11: an Error in ExoPlayer:Playback took the whole CarPlay process down)
+                String name = t.getName();
+                if (name != null && (name.startsWith("ExoPlayer") || name.startsWith("cp-climate-")) && t != Looper.getMainLooper().getThread()) {
+                    try {
+                        log("video: stopped after an error in " + name + ": " + e);
+                        if (main != null) main.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    send(error(ERROR_INCOMPATIBLE_ASSET));
+                                    stop("error in the player");
+                                } catch (Throwable ignored) {
+                                }
+                            }
+                        });
+                    } catch (Throwable ignored) {
+                    }
+                    return;
+                }
+                if (before != null) before.uncaughtException(t, e);
+            }
+        });
+        String mode = noPicture ? ", sound only (test)" : noSound ? ", picture only" : "";
+        trace("---- engine start (process " + android.os.Process.myPid() + ")" + mode);
+        log("video engine ready (ExoPlayer 2.19.1, proxy through the phone)" + mode);
+    }
+
+    static boolean noPicture, noSound;
+
+    /**
+     * settings video_no_picture (no picture decoder) and video_sound off (no sound renderer). Without sound the
+     * player keeps time by the wall clock: 2026-11-11 the head unit's audio output from CarPlay's process had no
+     * device ("DiPO available device not found", out_get_presentation_position errors), its position ran ahead,
+     * and the picture raced to catch up (50 frames dropped at a time), with no sound.
+     */
+    static final class Renderers extends com.google.android.exoplayer2.DefaultRenderersFactory {
+        Renderers(Context c) {
+            super(c);
+        }
+
+        @Override
+        protected void buildVideoRenderers(Context c, int mode, com.google.android.exoplayer2.mediacodec.MediaCodecSelector s, boolean fallback,
+                Handler h, com.google.android.exoplayer2.video.VideoRendererEventListener l, long joining,
+                ArrayList<com.google.android.exoplayer2.Renderer> out) {
+            if (!noPicture) super.buildVideoRenderers(c, mode, s, fallback, h, l, joining, out);
+        }
+
+        @Override
+        protected void buildAudioRenderers(Context c, int mode, com.google.android.exoplayer2.mediacodec.MediaCodecSelector s, boolean fallback,
+                com.google.android.exoplayer2.audio.AudioSink sink, Handler h, com.google.android.exoplayer2.audio.AudioRendererEventListener l,
+                ArrayList<com.google.android.exoplayer2.Renderer> out) {
+            if (!noSound) super.buildAudioRenderers(c, mode, s, fallback, sink, h, l, out);
+        }
+    }
+
+    static final java.text.SimpleDateFormat STAMP = new java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS", java.util.Locale.US);
+
+    /**
+     * a line in files/cpc-video-trace.txt, written and synced before returning, so the last step before a crash
+     * survives it (the HMG-API log loses what a dying process hadn't passed on yet). Kept under 512 KB.
+     */
+    static synchronized void trace(String s) {
+        try {
+            File f = new File(FILES + "cpc-video-trace.txt");
+            if (f.length() > 512 * 1024) {
+                File old = new File(FILES + "cpc-video-trace.1.txt");
+                old.delete();
+                f.renameTo(old);
+            }
+            java.io.FileOutputStream out = new java.io.FileOutputStream(f, true);
+            try {
+                String line;
+                synchronized (STAMP) {
+                    line = STAMP.format(new java.util.Date()) + " [" + Thread.currentThread().getName() + "] " + s + "\n";
+                }
+                out.write(line.getBytes("UTF-8"));
+                out.getFD().sync();
+            } finally {
+                out.close();
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /** a playback message from the phone (insertPlayQueueItem, setRate, seek, playbackInfo, ...) */
@@ -155,10 +250,21 @@ public final class Video {
         MediaSource source = progressive ? new ProgressiveMediaSource.Factory(data).createMediaSource(media)
                 : new HlsMediaSource.Factory(data).setAllowChunklessPreparation(true).createMediaSource(media);
         release();
-        player = new ExoPlayer.Builder(context, new com.google.android.exoplayer2.DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+        com.google.android.exoplayer2.DefaultRenderersFactory renderers = new Renderers(context);
+        // start after 4 s of video (quick start), but after a pause wait for 10 s so pauses come less often;
+        // keep loading up to 90 s ahead (2026-11-11: the default 2.5 s after a pause gave a pause every few seconds)
+        com.google.android.exoplayer2.DefaultLoadControl load = new com.google.android.exoplayer2.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(30000, 90000, 4000, 10000)
+                .setTargetBufferBytes(64 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build();
+        player = new ExoPlayer.Builder(context, renderers.setEnableDecoderFallback(true))
+                .setLoadControl(load)
                 .setLooper(Looper.getMainLooper()).build();
+        startCpuTrace();
         player.setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), false);
         player.addListener(listener);
+        player.addAnalyticsListener(steps);
         player.setMediaSource(source, startMs);
         player.setPlayWhenReady(false);
         player.prepare();
@@ -167,9 +273,141 @@ public final class Video {
         log("video: playing " + host(url) + " (" + (progressive ? "progressive" : "HLS") + ", from " + startMs / 1000 + " s) through the phone");
     }
 
+    /** the player's steps that touch the head unit's hardware or the network, for the trace */
+    static final com.google.android.exoplayer2.analytics.AnalyticsListener steps = new com.google.android.exoplayer2.analytics.AnalyticsListener() {
+        @Override
+        public void onVideoInputFormatChanged(EventTime t, com.google.android.exoplayer2.Format f,
+                com.google.android.exoplayer2.decoder.DecoderReuseEvaluation r) {
+            log("video: picture format " + f.sampleMimeType + " " + f.width + "x" + f.height + " " + f.codecs + " (opening the decoder)");
+        }
+
+        @Override
+        public void onVideoDecoderInitialized(EventTime t, String name, long initializedTimestampMs, long initializationDurationMs) {
+            log("video: picture decoder " + name + " opened in " + initializationDurationMs + " ms");
+        }
+
+        @Override
+        public void onAudioInputFormatChanged(EventTime t, com.google.android.exoplayer2.Format f,
+                com.google.android.exoplayer2.decoder.DecoderReuseEvaluation r) {
+            log("video: sound format " + f.sampleMimeType + " " + f.channelCount + "ch " + f.sampleRate + " Hz (opening the decoder)");
+        }
+
+        @Override
+        public void onAudioDecoderInitialized(EventTime t, String name, long initializedTimestampMs, long initializationDurationMs) {
+            log("video: sound decoder " + name + " opened in " + initializationDurationMs + " ms");
+        }
+
+        @Override
+        public void onRenderedFirstFrame(EventTime t, Object output, long renderTimeMs) {
+            log("video: first picture shown");
+        }
+
+        @Override
+        public void onLoadStarted(EventTime t, com.google.android.exoplayer2.source.LoadEventInfo info, com.google.android.exoplayer2.source.MediaLoadData data) {
+            trace("load " + data.dataType + " " + host(info.uri.toString()) + " " + tail(info.uri.getPath()));
+        }
+
+        @Override
+        public void onLoadCompleted(EventTime t, com.google.android.exoplayer2.source.LoadEventInfo info, com.google.android.exoplayer2.source.MediaLoadData data) {
+            long media = data.mediaStartTimeMs != C.TIME_UNSET && data.mediaEndTimeMs != C.TIME_UNSET ? data.mediaEndTimeMs - data.mediaStartTimeMs : -1;
+            long kbps = info.loadDurationMs > 0 ? info.bytesLoaded * 8 / info.loadDurationMs : -1;
+            trace("loaded " + info.bytesLoaded + " B in " + info.loadDurationMs + " ms (" + kbps + " kbit/s)"
+                    + (media > 0 ? " for " + media + " ms of video, " + (info.loadDurationMs * 100 / media) + "% of real time" : "")
+                    + " " + tail(info.uri.getPath()) + (player != null ? ", buffered to " + (player.getBufferedPosition() - player.getCurrentPosition()) + " ms ahead" : ""));
+        }
+
+        @Override
+        public void onAudioUnderrun(EventTime t, int bufferSize, long bufferSizeMs, long elapsedSinceLastFeedMs) {
+            trace("audio underrun (buffer " + bufferSizeMs + " ms, " + elapsedSinceLastFeedMs + " ms since fed)");
+        }
+
+        @Override
+        public void onAudioSinkError(EventTime t, Exception e) {
+            trace("audio sink error: " + e);
+        }
+
+        @Override
+        public void onLoadError(EventTime t, com.google.android.exoplayer2.source.LoadEventInfo info, com.google.android.exoplayer2.source.MediaLoadData data,
+                IOException e, boolean cancelled) {
+            log("video: load failed " + tail(info.uri.getPath()) + ": " + e);
+        }
+
+        @Override
+        public void onDroppedVideoFrames(EventTime t, int dropped, long elapsedMs) {
+            trace("dropped " + dropped + " frames in " + elapsedMs + " ms");
+        }
+    };
+
+    // ---- CPU use in the trace: whether the download is held back by the network or by the head unit's CPU ----
+
+    static long lastProcTicks = -1, lastAllTicks = -1, lastBusyTicks = -1;
+    static boolean cpuTracing;
+
+    static void startCpuTrace() {
+        if (cpuTracing || main == null) return;
+        cpuTracing = true;
+        main.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (player == null) {
+                    cpuTracing = false;
+                    lastProcTicks = -1;
+                    return;
+                }
+                try {
+                    traceCpu();
+                } catch (Throwable ignored) {
+                }
+                main.postDelayed(this, 5000);
+            }
+        }, 5000);
+    }
+
+    /** this process's and the whole system's CPU over the last 5 s, in % of all cores (4 on this head unit) */
+    static void traceCpu() throws IOException {
+        String self = readSmall("/proc/self/stat");
+        String[] f = self.substring(self.lastIndexOf(')') + 2).split(" ");
+        long proc = Long.parseLong(f[11]) + Long.parseLong(f[12]);   // utime + stime
+        String[] c = readSmall("/proc/stat").split("\n")[0].trim().split("\\s+");
+        long all = 0, idle = Long.parseLong(c[4]) + (c.length > 5 ? Long.parseLong(c[5]) : 0);
+        for (int i = 1; i < c.length; i++) all += Long.parseLong(c[i]);
+        long busy = all - idle;
+        if (lastProcTicks >= 0 && all > lastAllTicks) {
+            long d = all - lastAllTicks;
+            trace("cpu: video process " + (proc - lastProcTicks) * 100 / d + "%, whole system " + (busy - lastBusyTicks) * 100 / d
+                    + "% of all cores; " + (player != null ? (player.getBufferedPosition() - player.getCurrentPosition()) + " ms buffered" : ""));
+        }
+        lastProcTicks = proc;
+        lastAllTicks = all;
+        lastBusyTicks = busy;
+    }
+
+    static String readSmall(String path) throws IOException {
+        FileInputStream in = new FileInputStream(path);
+        try {
+            byte[] b = new byte[8192];
+            int n = in.read(b);
+            return n <= 0 ? "" : new String(b, 0, n, "US-ASCII");
+        } finally {
+            in.close();
+        }
+    }
+
+    static String tail(String path) {
+        if (path == null) return "";
+        int slash = path.lastIndexOf('/');
+        return slash >= 0 && slash < path.length() - 1 ? path.substring(slash + 1) : path;
+    }
+
     static final Player.Listener listener = new Player.Listener() {
         @Override
         public void onIsPlayingChanged(boolean isPlaying) {
+            // stopped only to buffer: still playing as far as the phone is concerned (a "paused" made it pause, 2026-11-11)
+            if (!isPlaying && player != null && player.getPlayWhenReady() && player.getPlayerError() == null
+                    && player.getPlaybackState() != Player.STATE_ENDED) {
+                updateStatus();
+                return;
+            }
             Map<String, Object> n = new LinkedHashMap<String, Object>();
             n.put("type", "playbackState");
             n.put("name", isPlaying ? "playing" : "paused");
@@ -252,7 +490,9 @@ public final class Video {
         if (itemUuid != null) info.put("item", dict("uuid", itemUuid));
         boolean ready = player != null && (player.getPlaybackState() == Player.STATE_READY || player.getPlaybackState() == Player.STATE_ENDED);
         boolean playing = player != null && player.isPlaying();
-        info.put("rate", playing ? 1.0 : 0.0);
+        // the rate the phone asked for, also while loading or buffering (rate 0 there made the phone send setRate 0)
+        boolean wanted = player != null && player.getPlayWhenReady() && player.getPlayerError() == null;
+        info.put("rate", wanted ? 1.0 : 0.0);
         info.put("readyToPlay", ready);
         info.put("playbackLikelyToKeepUp", ready && player.getPlaybackState() == Player.STATE_READY);
         if (ready) {
@@ -502,6 +742,7 @@ public final class Video {
     }
 
     static void log(String s) {
+        trace(s);
         callCore("ioniq6.cpclimate.VideoMessages", "engineLog", new Class<?>[] { String.class }, s);
     }
 

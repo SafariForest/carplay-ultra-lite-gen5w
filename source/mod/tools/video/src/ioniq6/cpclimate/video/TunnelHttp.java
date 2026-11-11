@@ -29,7 +29,7 @@ import javax.net.ssl.X509TrustManager;
 /**
  * A small HTTP/1.1 client whose connections go through the phone (PhoneProxy tunnels): GET with an optional
  * byte range, redirects followed, Content-Length / chunked / until-close bodies, one connection per request.
- * HTTPS is a second TLS inside the tunnel: Android's own (TLS 1.2 turned on, SNI set, host name checked).
+ * HTTPS is a second TLS inside the tunnel: BouncyCastle's (TLS 1.2/1.3, SNI set, chain and host name checked).
  */
 public final class TunnelHttp {
     static final Charset ASCII = Charset.forName("US-ASCII");
@@ -56,13 +56,22 @@ public final class TunnelHttp {
         /** the body's length, or -1 if unknown */
         public final long length;
         final Socket socket;
+        final Conn conn;
+        final TunnelHttp owner;
+        boolean closed;
 
         Response(int status, Map<String, List<String>> headers, String url, InputStream body, long length, Socket socket) {
+            this(status, headers, url, body, length, null, null, socket);
+        }
+
+        Response(int status, Map<String, List<String>> headers, String url, InputStream body, long length, Conn conn, TunnelHttp owner, Socket socket) {
             this.status = status;
             this.headers = headers;
             this.url = url;
             this.body = body;
             this.length = length;
+            this.conn = conn;
+            this.owner = owner;
             this.socket = socket;
         }
 
@@ -71,11 +80,79 @@ public final class TunnelHttp {
             return v == null || v.isEmpty() ? null : v.get(0);
         }
 
+        /** the body was read to its end and the server keeps the connection: it can carry the next request */
+        boolean reusable() {
+            String c = header("connection");
+            if (c != null && c.toLowerCase(Locale.US).contains("close")) return false;
+            if (body instanceof Limited) return ((Limited) body).left == 0;
+            if (body instanceof Chunked) return ((Chunked) body).done;
+            return false;
+        }
+
         public void close() {
+            if (closed) return;
+            closed = true;
+            if (conn != null && owner != null && reusable()) {
+                owner.give(conn);
+                return;
+            }
             try {
                 socket.close();
             } catch (IOException ignored) {
             }
+        }
+    }
+
+    /** a connection (tunnel, TLS inside it for https) and its buffered input, kept between requests */
+    static final class Conn {
+        final String key;
+        final Socket socket;
+        final InputStream in;
+        long idleSince;
+        int uses;
+
+        Conn(String key, Socket socket, InputStream in) {
+            this.key = key;
+            this.socket = socket;
+            this.in = in;
+        }
+    }
+
+    /** idle connections by scheme://host:port; each tunnel costs two handshakes (~0.5 s in the car), so reuse them */
+    final Map<String, java.util.ArrayDeque<Conn>> idle = new java.util.HashMap<String, java.util.ArrayDeque<Conn>>();
+    static final long IDLE_MS = 20000;
+    /** idle connections kept per server: the parallel ranges use up to 4 at once (ParallelStream) */
+    static final int IDLE_PER_KEY = ParallelStream.WORKERS + 1;
+
+    Conn take(String key) {
+        while (true) {
+            Conn c;
+            synchronized (idle) {
+                java.util.ArrayDeque<Conn> q = idle.get(key);
+                c = q == null ? null : q.pollLast();
+            }
+            if (c == null) return null;
+            if (System.currentTimeMillis() - c.idleSince < IDLE_MS && !c.socket.isClosed()) return c;
+            closeQuietly(c.socket);
+        }
+    }
+
+    void give(Conn c) {
+        c.idleSince = System.currentTimeMillis();
+        Conn drop = null;
+        synchronized (idle) {
+            java.util.ArrayDeque<Conn> q = idle.get(c.key);
+            if (q == null) idle.put(c.key, q = new java.util.ArrayDeque<Conn>());
+            q.addLast(c);
+            if (q.size() > IDLE_PER_KEY) drop = q.pollFirst();
+        }
+        if (drop != null) closeQuietly(drop.socket);
+    }
+
+    static void closeQuietly(Socket s) {
+        try {
+            s.close();
+        } catch (IOException ignored) {
         }
     }
 
@@ -103,17 +180,45 @@ public final class TunnelHttp {
         String host = u.getHost();
         if (host == null) throw new IOException("no host in " + url);
         int port = u.getPort() > 0 ? u.getPort() : tls ? 443 : 80;
+        String key = scheme + "://" + host + ":" + port;
+        Conn reused = take(key);
+        if (reused != null) {
+            try {
+                Video.trace("http: reusing the connection to " + host + " (use " + (reused.uses + 1) + ")");
+                return exchange(reused, u, url, host, position, length, extra);
+            } catch (IOException e) {
+                // the server closed it while idle: once more on a new connection
+                Video.trace("http: kept connection failed (" + e.getMessage() + "), opening a new one");
+                closeQuietly(reused.socket);
+            }
+        }
+        Video.trace("http: tunnel to " + host + ":" + port);
         Socket s = tunnels.open(host, port);
+        Video.trace("http: tunnel open");
         boolean ok = false;
         try {
             if (tls) s = secure(s, host, port);
+            Response r = exchange(new Conn(key, s, new java.io.BufferedInputStream(s.getInputStream(), 65536)), u, url, host, position, length, extra);
+            ok = true;
+            return r;
+        } finally {
+            if (!ok) closeQuietly(s);
+        }
+    }
+
+    /** one request and its response head on c (the body is left to the caller); c is closed if this fails */
+    Response exchange(Conn c, URI u, String url, String host, long position, long length, Map<String, String> extra) throws IOException {
+        Socket s = c.socket;
+        c.uses++;
+        boolean ok = false;
+        try {
             String path = u.getRawPath() == null || u.getRawPath().isEmpty() ? "/" : u.getRawPath();
             if (u.getRawQuery() != null) path += "?" + u.getRawQuery();
             StringBuilder req = new StringBuilder();
             req.append("GET ").append(path).append(" HTTP/1.1\r\n");
             req.append("Host: ").append(host).append(u.getPort() > 0 ? ":" + u.getPort() : "").append("\r\n");
             req.append("User-Agent: ").append(USER_AGENT).append("\r\n");
-            req.append("Accept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n");
+            req.append("Accept: */*\r\nAccept-Encoding: identity\r\nConnection: keep-alive\r\n");
             if (position > 0 || length >= 0) {
                 req.append("Range: bytes=").append(position).append('-');
                 if (length >= 0) req.append(position + length - 1);
@@ -128,19 +233,20 @@ public final class TunnelHttp {
             OutputStream out = s.getOutputStream();
             out.write(req.toString().getBytes(ASCII));
             out.flush();
-            InputStream in = new java.io.BufferedInputStream(s.getInputStream(), 65536);
+            InputStream in = c.in;
             String statusLine = line(in);
             String[] sp = statusLine.split(" ", 3);
             if (sp.length < 2 || !sp[0].startsWith("HTTP/")) throw new IOException("bad status line from " + host + ": " + statusLine);
             int status = Integer.parseInt(sp[1]);
+            Video.trace("http: " + status + " from " + host);
             Map<String, List<String>> headers = new LinkedHashMap<String, List<String>>();
             for (String h = line(in); h.length() > 0; h = line(in)) {
-                int c = h.indexOf(':');
-                if (c <= 0) continue;
-                String k = h.substring(0, c).trim().toLowerCase(Locale.US);
+                int colon = h.indexOf(':');
+                if (colon <= 0) continue;
+                String k = h.substring(0, colon).trim().toLowerCase(Locale.US);
                 List<String> v = headers.get(k);
                 if (v == null) headers.put(k, v = new ArrayList<String>());
-                v.add(h.substring(c + 1).trim());
+                v.add(h.substring(colon + 1).trim());
             }
             List<String> te = headers.get("transfer-encoding");
             List<String> cl = headers.get("content-length");
@@ -154,54 +260,175 @@ public final class TunnelHttp {
             } else {
                 body = in;
             }
+            if (len == 0 && body instanceof Limited) Video.trace("http: empty body");
             ok = true;
-            return new Response(status, headers, url, body, len, s);
+            return new Response(status, headers, url, body, len, c, this, s);
         } finally {
-            if (!ok) {
-                try {
-                    s.close();
-                } catch (IOException ignored) {
-                }
-            }
+            if (!ok) closeQuietly(s);
         }
     }
 
-    /** TLS to host inside the tunnel: the platform's TLS (1.2 turned on), SNI set, trusted by the system's roots or ExtraRoots */
-    static Socket secure(Socket tunnel, String host, int port) throws IOException {
-        SSLSocket ssl;
-        boolean android = isAndroid();
+    static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+
+    /**
+     * TLS to host inside the tunnel, with BouncyCastle's TLS (1.2 and 1.3) on the tunnel's streams: SNI set, the
+     * server's chain checked against the system's roots or ExtraRoots, its name checked against host.
+     * (2026-11-11: Android 4.4's own TLS can't run over a tunnel: OpenSSLSocketImpl uses the wrapped socket's file
+     * descriptor, which a tunnel doesn't have, and failed with "Socket closed". The JDK's worked in host tests.)
+     */
+    static Socket secure(Socket tunnel, final String host, int port) throws IOException {
+        final X509TrustManager tm;
         try {
-            SSLContext ctx = SSLContext.getInstance("TLS");
-            ctx.init(null, new TrustManager[] { trust() }, null);
-            ssl = (SSLSocket) ctx.getSocketFactory().createSocket(tunnel, host, port, true);
+            tm = trust();
         } catch (java.security.GeneralSecurityException e) {
             throw new IOException("TLS setup: " + e);
         }
-        // Android 4.4 supports TLS 1.1/1.2 but leaves them off for client sockets
-        List<String> want = new ArrayList<String>();
-        for (String p : ssl.getSupportedProtocols()) if (p.equals("TLSv1.2") || p.equals("TLSv1.1") || p.equals("TLSv1.3")) want.add(p);
-        if (!want.isEmpty()) ssl.setEnabledProtocols(want.toArray(new String[0]));
-        try {
-            if (android) {
-                // SNI: Android's OpenSSLSocketImpl.setHostname
-                ssl.getClass().getMethod("setHostname", String.class).invoke(ssl, host);
-            } else {
-                // host tests: the JDK sends SNI and checks the host name itself (by reflection: neither exists on Android 4.4)
-                javax.net.ssl.SSLParameters p = ssl.getSSLParameters();
-                p.getClass().getMethod("setEndpointIdentificationAlgorithm", String.class).invoke(p, "HTTPS");
-                ssl.setSSLParameters(p);
+        final org.bouncycastle.tls.TlsClientProtocol tls = new org.bouncycastle.tls.TlsClientProtocol(tunnel.getInputStream(), tunnel.getOutputStream());
+        final boolean literal = isAddress(host);
+        final org.bouncycastle.tls.DefaultTlsClient client = new org.bouncycastle.tls.DefaultTlsClient(
+                new org.bouncycastle.tls.crypto.impl.bc.BcTlsCrypto(RANDOM)) {
+            @Override
+            protected java.util.Vector getSNIServerNames() {
+                if (literal) return null;
+                java.util.Vector<org.bouncycastle.tls.ServerName> v = new java.util.Vector<org.bouncycastle.tls.ServerName>();
+                v.add(new org.bouncycastle.tls.ServerName(org.bouncycastle.tls.NameType.host_name, host.getBytes(ASCII)));
+                return v;
             }
-        } catch (Exception e) {
-            if (!android) throw new IOException("host name checking unavailable: " + e);
+
+            @Override
+            public org.bouncycastle.tls.TlsAuthentication getAuthentication() {
+                return new org.bouncycastle.tls.TlsAuthentication() {
+                    @Override
+                    public void notifyServerCertificate(org.bouncycastle.tls.TlsServerCertificate sc) throws IOException {
+                        X509Certificate[] chain = chain(sc.getCertificate());
+                        try {
+                            String key = chain[0].getPublicKey().getAlgorithm();
+                            tm.checkServerTrusted(chain, "EC".equals(key) || "ECDSA".equals(key) ? "ECDHE_ECDSA" : "ECDHE_RSA");
+                        } catch (CertificateException e) {
+                            throw new IOException("certificate of " + host + " not trusted: " + e.getMessage());
+                        }
+                        if (!nameMatches(host, chain[0])) throw new IOException("certificate isn't for " + host);
+                    }
+
+                    @Override
+                    public org.bouncycastle.tls.TlsCredentials getClientCredentials(org.bouncycastle.tls.CertificateRequest r) {
+                        return null;
+                    }
+                };
+            }
+        };
+        Video.trace("tls: handshake with " + host);
+        onBigStack("cp-climate-tls", new IoTask() {
+            @Override
+            public void run() throws IOException {
+                tls.connect(client);
+            }
+        }, tls);
+        Video.trace("tls: " + host + " ok");
+        return new PhoneProxy.TunnelSocket(tunnel, tls, tls.getInputStream(), tls.getOutputStream());
+    }
+
+    interface IoTask {
+        void run() throws IOException;
+    }
+
+    /**
+     * runs task on a thread with a 4 MB stack and waits for it: BouncyCastle's handshakes (pure Java big-number and
+     * curve math) run deeper than the small stacks of ExoPlayer's loader threads on Android 4.4. Any error, even an
+     * Error, comes back as an IOException, so it fails one request instead of the process.
+     */
+    static void onBigStack(String name, final IoTask task, final Object toClose) throws IOException {
+        final Throwable[] failed = new Throwable[1];
+        Thread t = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    task.run();
+                } catch (Throwable e) {
+                    failed[0] = e;
+                }
+            }
+        }, name, 4L << 20);
+        t.start();
+        try {
+            t.join();
+        } catch (InterruptedException e) {
+            // ExoPlayer cancelled the load: close the connection so the handshake ends too
+            try {
+                if (toClose instanceof org.bouncycastle.tls.TlsProtocol) ((org.bouncycastle.tls.TlsProtocol) toClose).close();
+            } catch (Throwable ignored) {
+            }
+            Thread.currentThread().interrupt();
+            throw new java.io.InterruptedIOException("cancelled during the TLS handshake");
         }
-        ssl.startHandshake();
-        // Android's default verifier checks the certificate's names (the JDK's always says no; it checked above)
-        HostnameVerifier v = HttpsURLConnection.getDefaultHostnameVerifier();
-        if (android && !v.verify(host, ssl.getSession())) {
-            ssl.close();
-            throw new IOException("certificate isn't for " + host);
+        Throwable e = failed[0];
+        if (e == null) return;
+        if (e instanceof IOException) throw (IOException) e;
+        Video.trace(name + " failed: " + stack(e));
+        throw new IOException(name + ": " + e, e);
+    }
+
+    static String stack(Throwable e) {
+        java.io.StringWriter w = new java.io.StringWriter();
+        e.printStackTrace(new java.io.PrintWriter(w));
+        return w.toString();
+    }
+
+    static X509Certificate[] chain(org.bouncycastle.tls.Certificate c) throws IOException {
+        if (c == null || c.isEmpty()) throw new IOException("server sent no certificate");
+        try {
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            X509Certificate[] out = new X509Certificate[c.getLength()];
+            for (int i = 0; i < out.length; i++)
+                out[i] = (X509Certificate) cf.generateCertificate(new java.io.ByteArrayInputStream(c.getCertificateAt(i).getEncoded()));
+            return out;
+        } catch (CertificateException e) {
+            throw new IOException("bad server certificate: " + e.getMessage());
         }
-        return ssl;
+    }
+
+    static boolean isAddress(String host) {
+        return host.indexOf(':') >= 0 || host.matches("[0-9.]+");
+    }
+
+    /** RFC 6125: the host against the certificate's DNS names (a wildcard covers one left-most label), or IP addresses; CN if no names */
+    static boolean nameMatches(String host, X509Certificate cert) {
+        String h = host.toLowerCase(Locale.US);
+        if (h.endsWith(".")) h = h.substring(0, h.length() - 1);
+        boolean address = isAddress(h), anyDns = false;
+        try {
+            java.util.Collection<List<?>> sans = cert.getSubjectAlternativeNames();
+            if (sans != null) for (List<?> san : sans) {
+                int type = ((Number) san.get(0)).intValue();
+                Object v = san.get(1);
+                if (!(v instanceof String)) continue;
+                if (type == 2) {
+                    anyDns = true;
+                    if (!address && dnsMatches(h, ((String) v).toLowerCase(Locale.US))) return true;
+                } else if (type == 7 && address) {
+                    try {
+                        if (java.net.InetAddress.getByName((String) v).equals(java.net.InetAddress.getByName(h))) return true;
+                    } catch (IOException ignored) {
+                    }
+                }
+            }
+        } catch (java.security.cert.CertificateParsingException e) {
+            return false;
+        }
+        if (anyDns || address) return false;
+        String dn = cert.getSubjectX500Principal().getName();
+        for (String part : dn.split(",")) {
+            String p = part.trim();
+            if (p.regionMatches(true, 0, "CN=", 0, 3)) return dnsMatches(h, p.substring(3).toLowerCase(Locale.US));
+        }
+        return false;
+    }
+
+    static boolean dnsMatches(String host, String pattern) {
+        if (pattern.endsWith(".")) pattern = pattern.substring(0, pattern.length() - 1);
+        if (!pattern.startsWith("*.")) return host.equals(pattern);
+        int dot = host.indexOf('.');
+        return dot > 0 && host.substring(dot + 1).equals(pattern.substring(2)) && pattern.indexOf('.', 2) > 0;
     }
 
     static boolean isAndroid() {

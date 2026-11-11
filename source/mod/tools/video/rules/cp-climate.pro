@@ -3,6 +3,7 @@
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 # readable stack traces in the head unit's log
 -dontobfuscate
-# the libraries reference things Android 4.4 or this build doesn't have (unused paths)
--dontwarn **
--ignorewarnings
+# HMG-API's hook classes come from the head unit at run time. Nothing else may be missing: a blanket
+# -dontwarn once hid that exoplayer-container wasn't in the build, and the first H.264 video crashed CarPlay
+# (NoClassDefFoundError ParsableNalUnitBitArray, 2026-11-11). Android 4.4 API gaps are checked by check/api19.py.
+-dontwarn hmgapi.hook.**

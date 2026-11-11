@@ -54,26 +54,16 @@ final class VehicleState {
     }
 
     /** how long a value the phone wrote wins over the car's old one, while the car catches up */
-    static final long HOLD_MS = 2500;
+    static final long HOLD_MS = 2500, WHEEL_HOLD_MS = 8000;
 
     final VsChannel.Log out;
     volatile Car car;
     /** when the session that made this state started (the second lane joins within VsChannel.SESSION_PAIRING_MS) */
     volatile long startedAt;
     private final Map<Long, Long> heldSince = new HashMap<Long, Long>();
-    /**
-     * seat cooling writes not echoed at once but confirmed when the car reports them (about a second later). Test of
-     * 2026-11-10: with the instant echo the Climate app drew cooling one step behind (heating was right); its
-     * progress view delays animations, and the echo may land inside that delay.
-     */
-    private final java.util.Set<Long> echoLater = new java.util.HashSet<Long>();
-
-    /** a write of the front seats' level going to or from cooling (layout B/C/D) */
-    static boolean coolingWrite(long iid, Object before, Object v) {
-        if (!ClimateMap.cooling() || (iid != ClimateMap.DRIVER_SEAT_LEVEL && iid != ClimateMap.PASSENGER_SEAT_LEVEL)) return false;
-        Long b = OpackCodec.asLong(before), n = OpackCodec.asLong(v);
-        return (b != null && b < 0) || (n != null && n < 0);
-    }
+    // (1.1.2-1.1.5 held back the echo of cooling writes, testing a drawing-delay theory; 2026-11-11 a level set
+    // from the car's own screen showed the same extra dot, so it was an offset, and the held echo made the button
+    // flash a stale level. Cooling writes are echoed at once again, as heating's always were.)
     final TreeMap<Long, Object> values = new TreeMap<Long, Object>();
     final TreeSet<Long> followed = new TreeSet<Long>();
     private final Map<Long, Object> resume = new HashMap<Long, Object>();
@@ -273,7 +263,12 @@ final class VehicleState {
             Map<Object, Object> c = (Map<Object, Object>) o;
             if (OpackCodec.asLong(c.get("iid")) - from != 1) continue;
             c.put("iid", ClimateMap.WHEEL_LEVEL);
+            // off / on only: the car's wheel heater is one button with no levels and no cooling. The template is
+            // the seat's, which layout B-D open to cooling first (2026-11-11: the wheel offered cooling, and a
+            // tap from off went to cooling, sent to the car as off)
+            c.put("minimumValue", 0L);
             c.put("maximumValue", 1L);
+            c.put("stepValue", 1L);
             c.put("initialValue", 0L);
             values.put(ClimateMap.WHEEL_LEVEL, 0L);
             only.add(c);
@@ -427,14 +422,58 @@ final class VehicleState {
         return svc;
     }
 
-    /** the front seats' HeatingCoolingLevel (iid 1026 / 1030) opened to -3, the cooling (ventilation) steps */
+    /**
+     * setting cooling_min: the lowest cooling step published (-3, or -4 as a test). The car has three ventilation
+     * steps either way (-1..-3; -4 is sent to the car as -3). 2026-11-11: with -3, Climate lit one dot too many
+     * when cooling (car cool 1 showed 2 dots, cool 2 and 3 showed 3), heating was right; -4 tests whether Climate
+     * divides by one less than the range's size.
+     */
+    static volatile long coolingMin = -3;
+
+    /** the front seats' HeatingCoolingLevel (iid 1026 / 1030) opened to coolingMin, the cooling (ventilation) steps */
     @SuppressWarnings("unchecked")
     static void withCooling(Map<Object, Object> seat) {
         long base = OpackCodec.asLong(seat.get("iid"));
         for (Object o : (List<Object>) seat.get("characteristics")) {
             Map<Object, Object> c = (Map<Object, Object>) o;
-            if (OpackCodec.asLong(c.get("iid")) == base + 1) c.put("minimumValue", -3L);
+            if (OpackCodec.asLong(c.get("iid")) == base + 1) c.put("minimumValue", coolingMin);
         }
+    }
+
+    /**
+     * setting vent_card "passenger": the two vent services (548 upper, 558 lower; layout keys 552 / 562) on the
+     * passenger's card instead of the driver's. The car has one vent mode for the cabin, so either card sets it.
+     * In layout D Climate's seat cards have two button slots (AUTO, vents, seat drew the seat over AUTO).
+     */
+    static volatile String ventCard = "driver";
+    static final long[] VENT_KEYS = { 552, 562 };
+
+    @SuppressWarnings("unchecked")
+    static byte[] withVentKey(byte[] accessories, String key, Map<Long, Object> values) {
+        Object list = OpackCodec.decode(accessories);
+        if (!(list instanceof List)) return null;
+        int moved = 0;
+        for (Object a : (List<Object>) list) {
+            Object services = a instanceof Map ? ((Map<Object, Object>) a).get("services") : null;
+            if (!(services instanceof List)) continue;
+            for (Object s : (List<Object>) services) {
+                if (!(s instanceof Map)) continue;
+                Object chars = ((Map<Object, Object>) s).get("characteristics");
+                if (!(chars instanceof List)) continue;
+                for (Object o : (List<Object>) chars) {
+                    Map<Object, Object> c = (Map<Object, Object>) o;
+                    Long iid = OpackCodec.asLong(c.get("iid"));
+                    for (long k : VENT_KEYS) {
+                        if (iid != null && iid == k) {
+                            c.put("initialValue", key);
+                            values.put(k, key);
+                            moved++;
+                        }
+                    }
+                }
+            }
+        }
+        return moved == 0 ? null : OpackCodec.encode(list);
     }
 
     /** the description with the extra seat and wheel services (null if there is no seat heating or climate service to copy) */
@@ -594,6 +633,14 @@ final class VehicleState {
             }
         }
         if (extras && !wheelHeater) out.log("VS steering wheel heater left out (test switch)");
+        if ("passenger".equals(ventCard)) {
+            byte[] moved = withVentKey(acc, "seat_front_right", values);
+            if (moved != null) {
+                acc = moved;
+                out.log("VS vent position buttons on the passenger's card");
+            }
+        }
+        if (extras && coolingLayout && coolingMin != -3) out.log("VS front seat cooling published from " + coolingMin + " (test)");
         byte[] versioned = withVersions(VsData.bytes(VsData.ACCESSORIES), acc);
         if (versioned != null) {
             acc = versioned;
@@ -725,11 +772,10 @@ final class VehicleState {
         for (Map.Entry<Long, Object> e : reported.entrySet()) {
             Long since = heldSince.get(e.getKey());
             if (since != null) {
-                if (now - since < HOLD_MS && !same(values.get(e.getKey()), e.getValue())) continue;
+                // the wheel heater's indicator follows a press only after ~5.5 s: its stale reading is held longer
+                long hold = e.getKey() == ClimateMap.WHEEL_LEVEL ? WHEEL_HOLD_MS : HOLD_MS;
+                if (now - since < hold && !same(values.get(e.getKey()), e.getValue())) continue;
                 heldSince.remove(e.getKey());
-                // a cooling write the car now confirms: tell the phone (its echo was held back)
-                if (echoLater.remove(e.getKey()) && same(values.get(e.getKey()), e.getValue()) && followed.contains(e.getKey()))
-                    changed.put(e.getKey(), e.getValue());
             }
             if (e.getValue() == ClimateMap.BLANK) {
                 carBlanks(e.getKey(), blanked);
@@ -811,10 +857,6 @@ final class VehicleState {
             results.put(iid, WRITTEN);
             // LIVI hides a notification history entry here; M3 keeps no history, so nothing to hide
             Object before = values.put(iid, v);
-            if (car != null && coolingWrite(iid, before, v)) {
-                echoLater.add(iid);
-                continue;
-            }
             if (!same(before, v) && followed.contains(iid)) changed.put(iid, v);
         }
         Car c = car;

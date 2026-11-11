@@ -198,11 +198,29 @@ final class ClimateMap {
             case 7: level = 2; break;
             case 8: level = 3; break;
             // the seat is ventilating: layout B shows it as cooling (-1..-3), otherwise as heat off
-            case 3: case 4: case 5: level = cooling() ? -(state - 2) : 0; break;
+            case 3: case 4: case 5: level = cooling() ? coolingLevel(state) : 0; break;
             default: return;
         }
         v.put(levelIid, level);
         v.put(onIid, level != 0);
+    }
+
+    /**
+     * The car's three ventilation steps (USMService states 3 / 4 / 5 = low / medium / high) and CarPlay's cooling
+     * levels. With the range published from -3 (setting cooling_min -3) they are -1 / -2 / -3, but Climate lit one
+     * dot too many. From -4 Climate draws a four-step bar: high is -4 (full), medium -2, low -1. The phone steps a
+     * tap at a time from -4 up, so its -3 is medium too (shown as -2 once the car confirms); every tap then changes
+     * the car (2026-11-11: with high reported as -3 the bar dropped to 3/4 after a tap to full).
+     */
+    static long coolingLevel(int state) {
+        if (VehicleState.coolingMin <= -4) return state == 5 ? -4 : state == 4 ? -2 : -1;
+        return -(state - 2);
+    }
+
+    /** a CarPlay cooling level (negative) as the car's ventilation state */
+    static int coolingState(long level) {
+        if (VehicleState.coolingMin <= -4) return level <= -4 ? 5 : level <= -2 ? 4 : 3;
+        return (int) Math.min(3, -level) + 2;
     }
 
     /** layout B of the extra seat controls: the front seats' level also carries ventilation, as negative steps */
@@ -474,9 +492,10 @@ final class ClimateMap {
             l = (Boolean) v ? (last != 0 && (cooling || last > 0) ? last : 1) : 0;
         } else {
             if (!(v instanceof Long)) return null;
-            l = Math.max(cooling ? -3 : 0, Math.min(3, (Long) v));
+            l = (Long) v;
         }
-        if (l < 0) return new Command(SEAT, code, (int) -l + 2, 0);
+        l = Math.max(cooling ? -4 : 0, Math.min(3, l));
+        if (l < 0) return new Command(SEAT, code, coolingState(l), 0);
         return new Command(SEAT, code, l == 0 ? 2 : (int) l + 5, 0);
     }
 
