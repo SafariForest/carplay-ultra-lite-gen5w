@@ -115,6 +115,14 @@ Version 1.3.3 is running on the test car (Hyundai Ioniq 6, US, firmware 260507) 
 - **Other cars:** the section is titled "Ioniq 6" on every car, and the preconditioning, Ambient light and screen rows also show on a car that doesn't have those apps, where they do nothing.
 - **Volume page:** the last row is still labelled "Musik", a leftover placeholder.
 
+## Climate and video branch (source)
+
+The branch `feature/climate-and-video` publishes the mod's source in [`source/`](source/), with work beyond 1.0.0:
+- **Climate:** rear seat heat, front seat cooling, rear climate zones, and the climate's on/off state.
+- **Video playback (experimental):** AirPlay video from the iPhone, played on the head unit through the iPhone's network.
+
+It is tested on one Ioniq 6 (Canada, firmware 250818). Some parts are not yet tried in the car. [`source/README.md`](source/README.md) has the status of each part, how the patches work, and how to build and test.
+
 ## Good to know
 
 - **Power buttons:** the driver's turns the climate off; the passenger's turns off only the passenger side.

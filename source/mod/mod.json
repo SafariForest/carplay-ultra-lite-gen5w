@@ -1,0 +1,55 @@
+{
+  "id": "cp-climate",
+  "name": "CarPlay Ultra-Lite",
+  "version": "1.1.2",
+  "hmgapi": ">=1.0.0",
+  "authors": [
+    "cp-climate contributors"
+  ],
+  "license": "GPL-3.0-or-later",
+  "description": "CarPlay Ultra features on a Gen5W head unit's own screen, for wireless CarPlay with iOS 26 or later: the car's climate in CarPlay both ways (dock temperatures, Apple's Climate app, a panel per seat with power buttons, Driver Only, seat heat, front and rear defrost), and with the E-GMP CarPlay EV Routing mod's theme on, the CarPlay Ultra theme with its wallpapers and Themes page. DiPO's CarPlay receiver is patched in memory (libCarPlayCore.so, one recipe); the vehicle state streams use ports 7130-7135 on the hotspot. Built and tested on the Ioniq 6 (CEEV USA 260507); run the compatibility check (cp-climate-check) before installing on another car. Based on LIVI by Lasse Heitgres (GPL-3.0).",
+  "system": [
+    {
+      "model": [
+        "CEEV"
+      ],
+      "region": "USA",
+      "firmware": "260507"
+    },
+    {
+      "model": [
+        "CEEV"
+      ],
+      "region": "CAN",
+      "firmware": "250818"
+    }
+  ],
+  "hooks": {
+    "jar": "hooks.jar",
+    "entry": "ioniq6.cpclimate.CpClimate",
+    "points": {
+      "dipo.carplay.session_started": "observe",
+      "dipo.carplay.session_finalized": "observe",
+      "dipo.carplay.iap_message": "observe",
+      "dipo.carplay.native_iap_send": "change"
+    },
+    "native": {
+      "libCarPlayCore.so": [
+        "recipes/carplay-climate-m1.recipe"
+      ]
+    }
+  },
+  "network": {
+    "rules": [
+      {
+        "chain": "input",
+        "in": "hotspot",
+        "proto": "tcp",
+        "ports": [
+          "7130-7135"
+        ],
+        "action": "accept"
+      }
+    ]
+  }
+}

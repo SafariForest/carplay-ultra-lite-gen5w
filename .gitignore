@@ -1,0 +1,7 @@
+.DS_Store
+# fetched by source/mod/tools/video/fetch-libs.sh
+source/mod/tools/video/r8.jar
+source/mod/tools/video/libs/
+# check.sh output
+source/check/report/
+source/check/cp-climate-check.jar

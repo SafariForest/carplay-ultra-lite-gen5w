@@ -1,0 +1,105 @@
+{
+ "version": 1,
+ "settings": [
+  {
+   "key": "carplay_ultra",
+   "type": "toggle",
+   "default": true,
+   "title": "CarPlay Ultra",
+   "description": "The CarPlay theme (Aston Martin DBX look), its wallpapers and Themes page, and a climate panel per seat. Needs the E-GMP CarPlay EV Routing mod with its CarPlay theme on, and after turning it on: forget the car on the iPhone (Settings > General > CarPlay) and pair again. Off: CarPlay climate only, in the classic CarPlay layout; then also turn the EV Routing mod's CarPlay theme off, or CarPlay can stay black. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "rear_defrost",
+   "type": "toggle",
+   "default": true,
+   "title": "Rear window defrost from CarPlay",
+   "description": "CarPlay's rear window button turns the car's rear defrost on and off (READY only) and shows its state. The state comes from a listener on the car's body controller, registered only if that listener is exactly the one this was checked against (Ioniq 6 CEEV 260507); otherwise the button works without showing the state. Turn it off if the head unit misbehaves. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "video_playback",
+   "type": "toggle",
+   "default": true,
+   "title": "Video playback in CarPlay",
+   "description": "Enables CarPlay's videoPlayback feature (AirPlay video from the iPhone, no FairPlay-protected content): the SETUP reply echoes videoPlayback and /info carries videoPlaybackInfo (videoPlaybackAllowed, featuresEx) and playbackCapabilities, as LIVI does. Experimental. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "extra_seats",
+   "type": "toggle",
+   "default": false,
+   "title": "Rear seats, ventilated seats and steering wheel heat (experimental)",
+   "description": "Adds three groups of controls to CarPlay's climate screens: rear seat heat (left and right, low and high), front seat ventilation (low, medium, high) and the heated steering wheel. They use Apple's type numbers from a decompiled iOS table, not yet tried on a phone: if CarPlay's climate screens go blank or misbehave, turn this off. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "extras_layout",
+   "type": "choice",
+   "default": "b",
+   "title": "Layout of the extra seat controls",
+   "description": "Only with the extra seat controls on. A: ventilation as separate seat fan controls (1.0.1's layout, which iOS didn't show). B: ventilation as the cooling steps of each front seat's own heat control (-1 to -3, as iOS 27 models it), and a rear climate zone so the rear seats' heat has a panel. C: as B, but the rear seats' heat is one control for the whole rear row (both seats together), because Apple's theme has a seat picture for the rear row and none for each rear seat. D: as B, with a rear left and a rear right zone, each with its own seat heat (no middle); since the theme has no picture for those seats, Climate shows zone buttons instead of the car. If one layout shows nothing, try another; the phone may need a second CarPlay connection to pick up the change. Restart the head unit afterwards.",
+   "options": [
+    { "value": "a", "title": "A: separate seat fan controls" },
+    { "value": "b", "title": "B: cooling levels + rear zone" },
+    { "value": "c", "title": "C: as B, rear seats as one row control" },
+    { "value": "d", "title": "D: as B, rear left and rear right zones (no car picture)" }
+   ],
+   "apply": "restart"
+  },
+  {
+   "key": "rear_zone",
+   "type": "toggle",
+   "default": true,
+   "title": "Rear climate zone",
+   "description": "Only with the extra seat controls on, layout B or C. Adds a rear zone to CarPlay's climate so the rear seats' heat has its own card. The car has no rear temperature, so the rear zone shows the driver's (read-only). Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "blank_when_off",
+   "type": "toggle",
+   "default": true,
+   "title": "No temperature while climate is off (test)",
+   "description": "While the car's climate is off, tells CarPlay the zones have no temperature (Apple's 'no value'), hoping it shows a dash instead of a number. Off: the zones keep showing the last setpoint. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "wheel_heater",
+   "type": "toggle",
+   "default": false,
+   "title": "Steering wheel heater button",
+   "description": "Only with the extra seat controls on. Adds the steering wheel heater to CarPlay's climate. Off by default: the driver's card has room for three buttons (AUTO, vent position, seat), and CarPlay drew the wheel on top of the vent position button. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "zone_power",
+   "type": "toggle",
+   "default": false,
+   "title": "Per-seat power buttons",
+   "description": "Adds the driver's and passenger's own power controls (the passenger's is the car's Driver Only). Off by default: the climate bar has the system power, and CarPlay drew this power button on top of AUTO. Restart the head unit afterwards.",
+   "apply": "restart"
+  },
+  {
+   "key": "vehicle_variant",
+   "type": "choice",
+   "default": "DBX",
+   "title": "Theme vehicle (test)",
+   "description": "Which Aston Martin of the CarPlay Ultra theme CarPlay draws: its car pictures (Climate, vehicle status) come from this model. The Climate app shows a placeholder instead of its car picture with the DBX; try another model to see if the picture appears. None sends no vehicle. Only with CarPlay Ultra on. Restart the head unit afterwards; the phone may need a second CarPlay connection.",
+   "options": [
+    { "value": "DBX", "title": "DBX (5 seats)" },
+    { "value": "DB12Coupe", "title": "DB12 Coupe (4 seats)" },
+    { "value": "VantageCoupe", "title": "Vantage Coupe (2 seats)" },
+    { "value": "none", "title": "None" }
+   ],
+   "apply": "restart"
+  },
+  {
+   "key": "ambient_test",
+   "type": "toggle",
+   "default": false,
+   "title": "Ambient light test (experimental)",
+   "description": "Adds one test setting, Ambient color, to CarPlay's car settings. It holds a #RRGGBB colour that the phone may change; each change is sent to the car's mood light (USMService setDualLight_BottomRed, Green and Blue, 0-255) and the car's values are read back into the log. Off: nothing is added and nothing is written to the car. Restart the head unit afterwards.",
+   "apply": "restart"
+  }
+ ]
+}

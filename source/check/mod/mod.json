@@ -1,0 +1,23 @@
+{
+  "id": "carplay-ultra-lite-check",
+  "name": "CarPlay Ultra-Lite compatibility check",
+  "version": "1.0.0",
+  "hmgapi": ">=1.0.0",
+  "authors": [
+    "cp-climate contributors"
+  ],
+  "license": "GPL-3.0-or-later",
+  "description": "Read-only. Checks whether this head unit can run CarPlay Ultra-Lite and the E-GMP CarPlay EV Routing mod: the libraries they patch, the car framework's climate, seat, body and voice calls and listeners, the climate flag numbers, a few read-only climate values, and which of the mods are installed. Writes the report (cp-climate-check.md and .json) to the CarPlayUltraLite-Check folder on the USB stick. Changes nothing on the unit; remove it after use.",
+  "services": [
+    {
+      "name": "check",
+      "script": "svc/check.sh",
+      "user": "root",
+      "start": "android",
+      "restart": false
+    }
+  ],
+  "usb": [
+    "CarPlayUltraLite-Check"
+  ]
+}
